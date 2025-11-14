@@ -20,7 +20,7 @@ try:
     settings.validators.validate_all()
 except dynaconf.ValidationError as e:
     accumulative_errors = e.details
-    logger.error(f"Setting Validation Error {accumulative_errors}")
+    logger.error(f"配置校验出错：{accumulative_errors}")
     raise e
 
 # :) Look https://www.dynaconf.com/validation/ for more validations
