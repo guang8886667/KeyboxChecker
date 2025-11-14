@@ -56,6 +56,34 @@ def get_device_ids_and_algorithms(xml_file):
     return results
 
 
+def summarize_algorithms(keybox_info):
+    if not keybox_info:
+        return '未知'
+
+    unique_algorithms = []
+    for info in keybox_info:
+        algorithm = info.get('Algorithm', '未知') or '未知'
+        if algorithm not in unique_algorithms:
+            unique_algorithms.append(algorithm)
+
+    if not unique_algorithms:
+        return '未知'
+
+    known_algorithms = [alg for alg in unique_algorithms if alg != '未知']
+    unknown_count = len(unique_algorithms) - len(known_algorithms)
+
+    parts = []
+    if known_algorithms:
+        parts.append('、'.join(known_algorithms))
+    if unknown_count:
+        if known_algorithms:
+            parts.append(f"{unknown_count} 个未知算法")
+        else:
+            return '未知'
+
+    return '；'.join(parts) if parts else '未知'
+
+
 def parse_number_of_certificates(xml_file):
     tree = ET.parse(xml_file)
     root = tree.getroot()
@@ -150,44 +178,43 @@ async def keybox_check(bot, message, document):
         return
 
     # Keybox Information
-    if keybox_info:
-        algorithm_text = keybox_info[0].get('Algorithm', '未知')
-    else:
-        algorithm_text = '未知'
-    reply = f"🔑 *算法：* `{algorithm_text}`"
-    reply += "\n----------------------------------------"
+    algorithm_text = summarize_algorithms(keybox_info)
+    reply_lines = [f"🔑 *算法：* `{algorithm_text}`", "----------------------------------------"]
 
     # Certificate Validity Verification
     serial_number = certificate.serial_number
     serial_number_string = hex(serial_number)[2:].lower()
-    reply += f"\n🔐 *序列号：* `{serial_number_string}`"
+    reply_lines.append(f"🔐 *序列号：* `{serial_number_string}`")
     subject = certificate.subject
-    reply += "\nℹ️ *主题信息：* `"
+    subject_line = "ℹ️ *主题信息：* `"
     for rdn in subject:
-        reply += f"{rdn.oid._name}={rdn.value}, "
-    reply = reply[:-2]
-    reply += "`"
+        subject_line += f"{rdn.oid._name}={rdn.value}, "
+    if subject_line.endswith(', '):
+        subject_line = subject_line[:-2] + "`"
+    else:
+        subject_line += "`"
+    reply_lines.append(subject_line)
     not_valid_before = certificate.not_valid_before_utc
     not_valid_after = certificate.not_valid_after_utc
     current_time = datetime.now(timezone.utc)
     is_valid = not_valid_before <= current_time <= not_valid_after
     if is_valid:
-        reply += "\n✅ 证书在有效期内"
+        reply_lines.append("✅ 证书在有效期内")
     elif current_time > not_valid_after:
-        reply += "\n❌ 证书已过期"
+        reply_lines.append("❌ 证书已过期")
     else:
-        reply += "\n❌ 证书尚未生效"
+        reply_lines.append("❌ 证书尚未生效")
 
     # Private Key Verification
     if check_private_key:
         private_key_public_key = private_key.public_key()
         certificate_public_key = certificate.public_key()
         if compare_keys(private_key_public_key, certificate_public_key):
-            reply += "\n✅ 私钥与证书公钥匹配"
+            reply_lines.append("✅ 私钥与证书公钥匹配")
         else:
-            reply += "\n❌ 私钥与证书公钥不匹配"
+            reply_lines.append("❌ 私钥与证书公钥不匹配")
     else:
-        reply += "\n❌ 私钥无效"
+        reply_lines.append("❌ 私钥无效")
 
     # Keychain Authentication
     flag = True
@@ -229,9 +256,9 @@ async def keybox_check(bot, message, document):
             flag = False
             break
     if flag:
-        reply += "\n✅ 密钥链有效"
+        reply_lines.append("✅ 密钥链有效")
     else:
-        reply += "\n❌ 密钥链无效"
+        reply_lines.append("❌ 密钥链无效")
 
     # Root Certificate Validation
     root_certificate = x509.load_pem_x509_certificate(pem_certificates[-1].encode(), default_backend())
@@ -241,19 +268,19 @@ async def keybox_check(bot, message, document):
     aosp_rsa_public_key = load_public_key_from_file("res/pem/aosp_rsa.pem")
     knox_public_key = load_public_key_from_file("res/pem/knox.pem")
     if compare_keys(root_public_key, google_public_key):
-        reply += "\n✅ 谷歌硬件认证根证书"
+        reply_lines.append("✅ 谷歌硬件认证根证书")
     elif compare_keys(root_public_key, aosp_ec_public_key):
-        reply += "\n🟡 AOSP 软件认证根证书（EC）"
+        reply_lines.append("🟡 AOSP 软件认证根证书（EC）")
     elif compare_keys(root_public_key, aosp_rsa_public_key):
-        reply += "\n🟡 AOSP 软件认证根证书（RSA）"
+        reply_lines.append("🟡 AOSP 软件认证根证书（RSA）")
     elif compare_keys(root_public_key, knox_public_key):
-        reply += "\n✅ 三星 Knox 认证根证书"
+        reply_lines.append("✅ 三星 Knox 认证根证书")
     else:
-        reply += "\n❌ 未知的根证书"
+        reply_lines.append("❌ 未知的根证书")
 
     # Number of Certificates in Keychain
     if pem_number >= 4:
-        reply += "\n🟡 密钥链中的证书数量超过 3 个"
+        reply_lines.append("🟡 密钥链中的证书数量超过 3 个")
 
     # Validation of certificate revocation
     try:
@@ -262,7 +289,7 @@ async def keybox_check(bot, message, document):
         logger.error("获取谷歌吊销 Keybox 列表失败")
         with open("res/json/status.json", 'r', encoding='utf-8') as file:
             status_json = json.load(file)
-            reply += "\n⚠️ 使用本地吊销 Keybox 列表"
+            reply_lines.append("⚠️ 使用本地吊销 Keybox 列表")
 
     status = None
     for i in range(pem_number):
@@ -273,8 +300,8 @@ async def keybox_check(bot, message, document):
             status = status_json['entries'][serial_number_string]
             break
     if not status:
-        reply += "\n✅ 序列号未出现在谷歌吊销 Keybox 列表中"
+        reply_lines.append("✅ 序列号未出现在谷歌吊销 Keybox 列表中")
     else:
-        reply += f"\n❌ 序列号在谷歌吊销 Keybox 列表中\n🔍 *原因：* `{status['reason']}`"
-    reply += f"\n⏱ *检查时间 (UTC)：* {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
-    await bot.reply_to(message, reply, parse_mode='Markdown')
+        reply_lines.append(f"❌ 序列号在谷歌吊销 Keybox 列表中\n🔍 *原因：* `{status['reason']}`")
+    reply_lines.append(f"⏱ *检查时间 (UTC)：* {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    await bot.reply_to(message, '\n'.join(reply_lines), parse_mode='Markdown')
