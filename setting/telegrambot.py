@@ -30,9 +30,9 @@ class TelegramBot(BaseSettings):
     @model_validator(mode="after")
     def bot_validator(self):
         if self.proxy_address:
-            logger.success(f"TelegramBot proxy was set to {self.proxy_address}")
+            logger.success(f"TelegramBot 代理地址已设置为 {self.proxy_address}")
         if self.token is None:
-            logger.info("\n🍀Check:Telegrambot token is empty")
+            logger.info("\n🍀检查：TelegramBot Token 为空")
         if self.bot_id is None and self.token:
             try:
                 from telebot import TeleBot
@@ -52,14 +52,14 @@ class TelegramBot(BaseSettings):
                 self.bot_link = f"https://t.me/{self.bot_username}"
             except requests.exceptions.ConnectTimeout:
                 logger.error(
-                    "\n🍀TelegramBot Connect Error --error ConnectTimeout, Please Check Your Network To Telegram"
+                    "\n🍀TelegramBot 连接错误 -- 原因 ConnectTimeout，请检查到 Telegram 的网络连接"
                 )
                 raise requests.exceptions.ConnectTimeout
             except Exception as e:
-                logger.error(f"\n🍀TelegramBot Connect Error --error {e}")
+                logger.error(f"\n🍀TelegramBot 连接错误 -- 原因 {e}")
             else:
                 logger.success(
-                    f"🍀TelegramBot Init Connection Success --bot_name {self.bot_username} --bot_id {self.bot_id}"
+                    f"🍀TelegramBot 初始化连接成功 -- 机器人名称 {self.bot_username} -- 机器人 ID {self.bot_id}"
                 )
         return self
 
