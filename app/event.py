@@ -60,12 +60,12 @@ def summarize_algorithms(keybox_info):
     if not keybox_info:
         return '未知'
 
-    unique_algorithms = []
+    normalized_algorithms = []
     for info in keybox_info:
-        algorithm = info.get('Algorithm', '未知') or '未知'
-        if algorithm not in unique_algorithms:
-            unique_algorithms.append(algorithm)
+        algorithm = (info or {}).get('Algorithm', '未知') or '未知'
+        normalized_algorithms.append(algorithm)
 
+    unique_algorithms = list(dict.fromkeys(normalized_algorithms))
     if not unique_algorithms:
         return '未知'
 
@@ -186,13 +186,8 @@ async def keybox_check(bot, message, document):
     serial_number_string = hex(serial_number)[2:].lower()
     reply_lines.append(f"🔐 *序列号：* `{serial_number_string}`")
     subject = certificate.subject
-    subject_line = "ℹ️ *主题信息：* `"
-    for rdn in subject:
-        subject_line += f"{rdn.oid._name}={rdn.value}, "
-    if subject_line.endswith(', '):
-        subject_line = subject_line[:-2] + "`"
-    else:
-        subject_line += "`"
+    subject_components = [f"{rdn.oid._name}={rdn.value}" for rdn in subject]
+    subject_line = "ℹ️ *主题信息：* `" + ", ".join(subject_components) + "`"
     reply_lines.append(subject_line)
     not_valid_before = certificate.not_valid_before_utc
     not_valid_after = certificate.not_valid_after_utc
