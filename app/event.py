@@ -150,7 +150,11 @@ async def keybox_check(bot, message, document):
         return
 
     # Keybox Information
-    reply = f"🔑 *算法：* `{keybox_info[0]['Algorithm']}`"
+    if keybox_info:
+        algorithm_text = keybox_info[0].get('Algorithm', '未知')
+    else:
+        algorithm_text = '未知'
+    reply = f"🔑 *算法：* `{algorithm_text}`"
     reply += "\n----------------------------------------"
 
     # Certificate Validity Verification
